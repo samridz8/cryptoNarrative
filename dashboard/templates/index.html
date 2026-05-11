@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Narrative Radar</title>
+  <style>
+    :root {
+      --bg:     #0d0d0f;
+      --bg2:    #141416;
+      --bg3:    #1c1c1f;
+      --border: #2a2a2f;
+      --text:   #dddde8;
+      --dim:    #666680;
+      --green:  #00d48a;
+      --red:    #ff4d4d;
+      --yellow: #ffc84a;
+      --blue:   #4d9fff;
+      --purple: #a78bfa;
+      --orange: #ff8c42;
+      --font:   'Courier New', Courier, monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; min-height: 100vh; }
+
+    /* ── Header ──────────────────────────────────────── */
+    header {
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      padding: 14px 24px; display: flex; justify-content: space-between; align-items: center;
+    }
+    header h1 { font-size: 18px; color: var(--green); letter-spacing: 3px; }
+    header .sub { color: var(--dim); font-size: 11px; margin-top: 2px; }
+    #last-updated { font-size: 11px; color: var(--dim); text-align: right; }
+
+    /* ── Stats bar ───────────────────────────────────── */
+    .stats {
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      padding: 10px 24px; display: flex; gap: 32px; flex-wrap: wrap;
+    }
+    .stat-label { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; }
+    .stat-value { font-size: 22px; color: var(--blue); font-weight: bold; line-height: 1.2; }
+
+    /* ── Layout ──────────────────────────────────────── */
+    .grid { padding: 16px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .full { grid-column: 1 / -1; }
+
+    /* ── Panel ───────────────────────────────────────── */
+    .panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 3px; overflow: hidden; }
+    .panel-head {
+      padding: 9px 14px; background: var(--bg3); border-bottom: 1px solid var(--border);
+      font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .panel-body { max-height: 420px; overflow-y: auto; }
+    .panel-body.tall { max-height: 520px; }
+
+    /* ── Filter tabs ─────────────────────────────────── */
+    .tab-bar { display: flex; gap: 4px; padding: 8px 10px; background: var(--bg3); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .tab {
+      padding: 3px 10px; border-radius: 2px; font-size: 10px; cursor: pointer;
+      color: var(--dim); border: 1px solid transparent; transition: all .15s;
+      background: none;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { background: rgba(167,139,250,.15); color: var(--purple); border-color: var(--purple); }
+    .tab.susp.active { background: rgba(255,77,77,.12); color: var(--red); border-color: var(--red); }
+
+    /* ── Table ───────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; padding: 7px 10px; font-size: 10px; color: var(--dim);
+      text-transform: uppercase; letter-spacing: .5px; background: var(--bg3);
+      border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1; white-space: nowrap;
+    }
+    td { padding: 6px 10px; border-bottom: 1px solid rgba(42,42,47,.45); white-space: nowrap; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.025); }
+
+    /* ── Explanation tooltip ─────────────────────────── */
+    .explain-wrap { position: relative; display: inline-block; }
+    .explain-icon { cursor: pointer; color: var(--dim); font-size: 10px; border: 1px solid var(--border); border-radius: 50%; padding: 0 3px; line-height: 14px; display: inline-block; }
+    .explain-icon:hover { color: var(--blue); border-color: var(--blue); }
+    .explain-popup {
+      display: none; position: absolute; z-index: 99; bottom: 120%; left: 0;
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 4px;
+      padding: 8px 10px; min-width: 220px; max-width: 300px; white-space: normal;
+      font-size: 11px; color: var(--text); line-height: 1.6;
+    }
+    .explain-wrap:hover .explain-popup { display: block; }
+
+    /* ── Score bar ───────────────────────────────────── */
+    .bar-wrap { display: flex; align-items: center; gap: 6px; }
+    .bar-track { flex: 1; height: 3px; background: var(--bg3); border-radius: 2px; min-width: 36px; }
+    .bar-fill  { height: 100%; border-radius: 2px; }
+
+    /* ── Persist pips ────────────────────────────────── */
+    .pips { display: flex; gap: 2px; align-items: center; }
+    .pip { width: 6px; height: 6px; border-radius: 50%; background: var(--border); }
+    .pip.on   { background: var(--green); }
+    .pip.half { background: var(--yellow); }
+
+    /* ── Badges ──────────────────────────────────────── */
+    .badge { display: inline-block; padding: 1px 7px; border-radius: 2px; font-size: 10px; font-weight: bold; white-space: nowrap; }
+    .b-green  { background: rgba(0,212,138,.15);  color: var(--green); }
+    .b-yellow { background: rgba(255,200,74,.15); color: var(--yellow); }
+    .b-red    { background: rgba(255,77,77,.15);  color: var(--red); }
+    .b-blue   { background: rgba(77,159,255,.15); color: var(--blue); }
+    .b-purple { background: rgba(167,139,250,.15);color: var(--purple); }
+    .b-orange { background: rgba(255,140,66,.15); color: var(--orange); }
+
+    .pos { color: var(--green); }
+    .neg { color: var(--red); }
+    .neu { color: var(--dim); }
+    .muted { color: var(--dim); font-size: 11px; }
+    .warn { color: var(--red); }
+
+    /* ── Alert items ─────────────────────────────────── */
+    .alert-item { padding: 11px 14px; border-bottom: 1px solid var(--border); }
+    .alert-item:last-child { border-bottom: none; }
+    .alert-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .alert-name { font-weight: bold; color: var(--yellow); }
+    .alert-meta { display: flex; gap: 8px; align-items: center; }
+    .alert-tokens { color: var(--dim); font-size: 11px; margin-top: 2px; }
+    .alert-reason { color: var(--dim); font-size: 11px; margin-top: 2px; font-style: italic; }
+    .alert-time   { font-size: 10px; color: var(--dim); }
+
+    /* ── News items ──────────────────────────────────── */
+    .news-item { padding: 9px 14px; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: flex-start; }
+    .news-item:last-child { border-bottom: none; }
+    .news-title { color: var(--text); font-size: 11px; line-height: 1.5; }
+    .news-title a { color: inherit; text-decoration: none; }
+    .news-title a:hover { color: var(--blue); }
+    .news-meta  { font-size: 10px; color: var(--dim); margin-top: 2px; display: flex; gap: 8px; }
+
+    /* ── GitHub items ────────────────────────────────── */
+    .gh-item { padding: 8px 14px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; }
+    .gh-item:last-child { border-bottom: none; }
+    .gh-repo  { font-size: 11px; color: var(--blue); }
+    .gh-meta  { font-size: 11px; color: var(--dim); display: flex; gap: 10px; }
+
+    /* ── Token row tiers ─────────────────────────────────────────────── */
+    tr.tier-leader td { border-left: 2px solid var(--green); }
+    tr.tier-building td { border-left: 2px solid var(--yellow); }
+    tr.tier-suspicious td { border-left: 2px solid var(--red); background: rgba(255,77,77,.04); }
+
+    /* ── RS display ──────────────────────────────────────────────────── */
+    .rs-bar { display: flex; align-items: center; gap: 5px; }
+    .rs-val { min-width: 22px; font-size: 12px; font-weight: bold; }
+
+    /* ── Ecosystem badge ─────────────────────────────────────────────── */
+    .eco { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 10px;
+           background: rgba(77,159,255,.12); color: var(--blue); white-space: nowrap; }
+
+    /* ── WHY inline text ─────────────────────────────────────────────── */
+    .why-inline { font-size: 10px; color: var(--dim); max-width: 150px;
+                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ── Narrative trend arrows ──────────────────────────────────────── */
+    .trend-up   { color: var(--green); }
+    .trend-down { color: var(--red); }
+    .trend-flat { color: var(--dim); }
+
+    /* ── Scrollbar ───────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg2); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>▸ NARRATIVE RADAR</h1>
+    <div class="sub">local crypto narrative &amp; momentum intelligence · quality-filtered signals only</div>
+  </div>
+  <div id="last-updated">connecting…</div>
+</header>
+
+<div class="stats">
+  <div><div class="stat-label">Tokens Tracked</div><div class="stat-value" id="s-tokens">—</div></div>
+  <div><div class="stat-label">Snapshots</div><div class="stat-value" id="s-snaps">—</div></div>
+  <div><div class="stat-label">Alerts Fired</div><div class="stat-value" id="s-alerts">—</div></div>
+  <div><div class="stat-label">News Articles</div><div class="stat-value" id="s-news">—</div></div>
+  <div><div class="stat-label">Repos Tracked</div><div class="stat-value" id="s-gh">—</div></div>
+</div>
+
+<div class="grid">
+
+  <!-- ── Narrative Leaderboard ── -->
+  <div class="panel">
+    <div class="panel-head">▸ Narrative Leaderboard — confidence + persistence</div>
+    <div class="panel-body">
+      <table>
+        <thead>
+          <tr>
+            <th>Narrative</th>
+            <th>Tokens</th>
+            <th>Confidence</th>
+            <th>Persist</th>
+            <th>Avg Score</th>
+            <th>Top Symbols</th>
+          </tr>
+        </thead>
+        <tbody id="tb-narratives"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Quality Token Table ── -->
+  <div class="panel">
+    <div class="panel-head">▸ Quality Tokens — final narrative-aware score</div>
+    <div class="tab-bar" id="token-tabs">
+      <button class="tab active" data-filter="All">All</button>
+      <button class="tab" data-filter="AI Agents">AI Agents</button>
+      <button class="tab" data-filter="DePIN">DePIN</button>
+      <button class="tab" data-filter="DeFi">DeFi</button>
+      <button class="tab" data-filter="Layer2">Layer2</button>
+      <button class="tab" data-filter="RWA">RWA</button>
+      <button class="tab" data-filter="Solana">Solana</button>
+      <button class="tab" data-filter="Base">Base</button>
+      <button class="tab susp" data-filter="__suspicious">🚨 Suspicious</button>
+    </div>
+    <div class="panel-body tall">
+      <table>
+        <thead>
+          <tr>
+            <th>Token</th>
+            <th>Final</th>
+            <th>Mom.</th>
+            <th>RS</th>
+            <th>Persist</th>
+            <th>24h Δ</th>
+            <th>Ecosystem</th>
+            <th>Narrative</th>
+            <th>Why</th>
+          </tr>
+        </thead>
+        <tbody id="tb-tokens"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── News Feed ── -->
+  <div class="panel">
+    <div class="panel-head">▸ News Feed — narrative-mapped headlines</div>
+    <div class="panel-body" id="news-wrap"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- ── GitHub Activity ── -->
+  <div class="panel">
+    <div class="panel-head">▸ GitHub Activity — tracked protocol repos</div>
+    <div class="panel-body" id="gh-wrap"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- ── Alerts ── -->
+  <div class="panel full">
+    <div class="panel-head">▸ Recent Alerts</div>
+    <div class="panel-body" id="alerts-wrap"><div class="empty">No alerts yet — monitoring…</div></div>
+  </div>
+
+</div>
+
+<script>
+  const REFRESH_MS = 60_000;
+  let _allTokens = [];
+  let _suspiciousTokens = [];
+  let _activeFilter = 'All';
+  let _narrativeTrends = {};  // narrative → [{confidence, persistence}]
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  function scoreColor(s) {
+    if (s >= 70) return '#ff4d4d';
+    if (s >= 50) return '#ffc84a';
+    if (s >= 30) return '#00d48a';
+    return '#4d9fff';
+  }
+  function scoreBadge(s) {
+    if (s >= 70) return 'b-red';
+    if (s >= 50) return 'b-yellow';
+    if (s >= 30) return 'b-green';
+    return 'b-blue';
+  }
+  function rsColor(rs) {
+    if (rs >= 75) return 'var(--green)';
+    if (rs >= 55) return 'var(--yellow)';
+    if (rs >= 35) return 'var(--dim)';
+    return 'var(--red)';
+  }
+  function rsDisplay(rs) {
+    const v = (rs || 0).toFixed(0);
+    const color = rsColor(rs);
+    const w = Math.round(rs || 0);
+    return `<div class="rs-bar">
+      <span class="rs-val" style="color:${color}">${v}</span>
+      <div class="bar-track" style="min-width:30px"><div class="bar-fill" style="width:${w}%;background:${color}"></div></div>
+    </div>`;
+  }
+  function ecosystemBadge(eco) {
+    if (!eco || eco === 'Unknown' || eco === 'Multi-chain') {
+      return `<span class="muted" style="font-size:10px">${eco || '—'}</span>`;
+    }
+    return `<span class="eco">${eco}</span>`;
+  }
+  function tokenTierClass(t) {
+    const isSusp = Math.abs(t.price_change_24h || 0) > 40 && (t.persistence_score || 0) < 20;
+    if (isSusp) return 'tier-suspicious';
+    if ((t.final_score || 0) >= 50) return 'tier-leader';
+    if ((t.final_score || 0) >= 30) return 'tier-building';
+    return '';
+  }
+  function fmtChange(v) {
+    const n = parseFloat(v) || 0;
+    const cls = n > 0 ? 'pos' : n < 0 ? 'neg' : 'neu';
+    return `<span class="${cls}">${n > 0 ? '+' : ''}${n.toFixed(2)}%</span>`;
+  }
+  function fmtUSD(v) {
+    const n = parseFloat(v) || 0;
+    if (!n) return '<span class="muted">—</span>';
+    if (n >= 1e9) return `$${(n/1e9).toFixed(1)}B`;
+    if (n >= 1e6) return `$${(n/1e6).toFixed(1)}M`;
+    if (n >= 1e3) return `$${(n/1e3).toFixed(0)}K`;
+    return `$${n.toFixed(0)}`;
+  }
+  function pips(score, count = 5) {
+    const filled = Math.round((score || 0) / (100 / count));
+    return `<div class="pips">${Array.from({length: count}, (_, i) =>
+      `<div class="pip ${i < filled ? (filled >= count-1 ? 'on' : 'half') : ''}"></div>`
+    ).join('')}<span class="muted" style="margin-left:4px">${Math.round(score||0)}</span></div>`;
+  }
+  function bar(score) {
+    return `<div class="bar-wrap">
+      <span style="min-width:28px;font-size:12px">${(score||0).toFixed(1)}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${score||0}%;background:${scoreColor(score)}"></div></div>
+    </div>`;
+  }
+  function timeAgo(ts) {
+    if (!ts) return '—';
+    const d = new Date(ts.includes('T') ? ts : ts + 'Z');
+    const s = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (s < 60)    return `${s}s ago`;
+    if (s < 3600)  return `${Math.floor(s/60)}m ago`;
+    if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+    return `${Math.floor(s/86400)}d ago`;
+  }
+  function narrativeBadge(n) {
+    const colors = {
+      'AI Agents': 'b-purple', 'DePIN': 'b-blue', 'RWA': 'b-yellow',
+      'Layer2': 'b-green', 'DeFi': 'b-blue', 'Solana': 'b-purple',
+      'Base': 'b-blue', 'Meme': 'b-red', 'GameFi': 'b-orange',
+    };
+    const cls = colors[n] || 'b-blue';
+    return n ? `<span class="badge ${cls}">${n}</span>` : '<span class="muted">Other</span>';
+  }
+  function explainCell(bullets) {
+    if (!bullets || !bullets.length) return '<span class="muted">—</span>';
+    const first = bullets[0];
+    const rest  = bullets.slice(1).map(b => `• ${b}`).join('<br>');
+    const popup = bullets.map(b => `• ${b}`).join('<br>');
+    return `<div class="explain-wrap">
+      <span class="why-inline" title="${first}">${first}</span>
+      ${rest ? `<span class="explain-icon" style="margin-left:3px">+${bullets.length - 1}</span>` : ''}
+      <div class="explain-popup">${popup}</div>
+    </div>`;
+  }
+  function trendArrow(narrative) {
+    const data = _narrativeTrends[narrative];
+    if (!data || data.length < 2) return '';
+    const latest = data[0].confidence;
+    const prev   = data[1].confidence;
+    const delta  = latest - prev;
+    if (delta > 3)  return ' <span class="trend-up">↑</span>';
+    if (delta < -3) return ' <span class="trend-down">↓</span>';
+    return ' <span class="trend-flat">→</span>';
+  }
+
+  // ── Token table rendering ─────────────────────────────────────────────────
+  function renderTokenTable(filter) {
+    const tb = document.getElementById('tb-tokens');
+    let list;
+    if (filter === '__suspicious') {
+      list = _suspiciousTokens;
+    } else if (filter === 'All') {
+      list = _allTokens;
+    } else {
+      list = _allTokens.filter(t => t.narrative === filter);
+    }
+
+    if (!list.length) {
+      tb.innerHTML = `<tr><td colspan="9" class="empty">${filter === '__suspicious' ? 'No suspicious tokens detected' : 'No tokens for this narrative yet'}</td></tr>`;
+      return;
+    }
+
+    tb.innerHTML = list.slice(0, 35).map((t, idx) => {
+      const tier   = tokenTierClass(t);
+      const leader = tier === 'tier-leader';
+      const nameStyle = leader ? 'color:var(--green)' : tier === 'tier-suspicious' ? 'color:var(--red)' : '';
+      const rankLabel = idx < 3 && filter !== '__suspicious'
+        ? `<span style="color:var(--dim);font-size:10px;margin-right:3px">#${idx+1}</span>` : '';
+      return `<tr class="${tier}">
+        <td>
+          ${rankLabel}<strong style="${nameStyle}">${t.symbol}</strong>
+          <span class="muted" style="margin-left:3px">${(t.name||'').slice(0,12)}</span>
+        </td>
+        <td>${bar(t.final_score || t.momentum_score)}</td>
+        <td><span style="color:${scoreColor(t.momentum_score)}">${(t.momentum_score||0).toFixed(1)}</span></td>
+        <td>${rsDisplay(t.relative_strength)}</td>
+        <td>${pips(t.persistence_score)}</td>
+        <td>${fmtChange(t.price_change_24h)}</td>
+        <td>${ecosystemBadge(t.ecosystem)}</td>
+        <td>${narrativeBadge(t.narrative)}</td>
+        <td>${explainCell(t.signal_explanation)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── Tab wiring ────────────────────────────────────────────────────────────
+  document.getElementById('token-tabs').addEventListener('click', e => {
+    const btn = e.target.closest('.tab');
+    if (!btn) return;
+    _activeFilter = btn.dataset.filter;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    renderTokenTable(_activeFilter);
+  });
+
+  // ── Data fetchers ─────────────────────────────────────────────────────────
+  async function refresh() {
+    try {
+      const [summary, narratives, tokens, suspicious, alerts, news, gh, trends] = await Promise.all([
+        fetch('/api/summary').then(r => r.json()),
+        fetch('/api/narratives').then(r => r.json()),
+        fetch('/api/tokens').then(r => r.json()),
+        fetch('/api/suspicious').then(r => r.json()),
+        fetch('/api/alerts').then(r => r.json()),
+        fetch('/api/news?limit=20').then(r => r.json()),
+        fetch('/api/github').then(r => r.json()),
+        fetch('/api/narrative-trends').then(r => r.json()).catch(() => ({})),
+      ]);
+      _narrativeTrends = trends || {};
+      renderSummary(summary);
+      renderNarratives(narratives);
+      _allTokens = tokens || [];
+      _suspiciousTokens = suspicious || [];
+      renderTokenTable(_activeFilter);
+      renderAlerts(alerts);
+      renderNews(news);
+      renderGithub(gh);
+      document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    } catch (err) {
+      document.getElementById('last-updated').textContent = 'Error: ' + err.message;
+    }
+  }
+
+  function renderSummary(d) {
+    document.getElementById('s-tokens').textContent = d.total_tokens ?? '—';
+    document.getElementById('s-snaps').textContent  = d.total_snapshots ?? '—';
+    document.getElementById('s-alerts').textContent = d.total_alerts ?? '—';
+    document.getElementById('s-news').textContent   = d.total_news ?? '—';
+    document.getElementById('s-gh').textContent     = d.github_tracked ?? '—';
+  }
+
+  function renderNarratives(list) {
+    const tb = document.getElementById('tb-narratives');
+    if (!list?.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">No narrative data yet</td></tr>'; return; }
+    tb.innerHTML = list.map(n => {
+      const arrow = trendArrow(n.narrative);
+      const nameColor = n.confidence >= 60 ? 'var(--green)' : n.confidence >= 35 ? 'var(--yellow)' : 'var(--dim)';
+      const tier = n.confidence >= 60 ? '★' : n.confidence >= 35 ? '◆' : '·';
+      return `<tr>
+        <td><strong style="color:${nameColor}">${tier} ${n.narrative}</strong>${arrow}</td>
+        <td>${n.token_count}</td>
+        <td>
+          <div class="bar-wrap">
+            <span class="badge ${scoreBadge(n.confidence)}">${n.confidence.toFixed(0)}</span>
+            <div class="bar-track"><div class="bar-fill" style="width:${n.confidence}%;background:${scoreColor(n.confidence)}"></div></div>
+          </div>
+        </td>
+        <td>${pips(n.persistence_score)}</td>
+        <td>${n.avg_momentum_score.toFixed(1)}</td>
+        <td><span class="muted">${(n.tokens||[]).slice(0,4).join(' · ')}</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderAlerts(list) {
+    const wrap = document.getElementById('alerts-wrap');
+    if (!list?.length) { wrap.innerHTML = '<div class="empty">No alerts yet — system is monitoring for signals…</div>'; return; }
+    wrap.innerHTML = list.map(a => `
+      <div class="alert-item">
+        <div class="alert-head">
+          <span class="alert-name">▸ ${a.narrative}</span>
+          <div class="alert-meta">
+            <span class="badge ${scoreBadge(a.confidence)}">${a.confidence >= 70 ? 'HIGH' : 'SIGNAL'} ${a.confidence.toFixed(0)}</span>
+            <span class="alert-time">${timeAgo(a.timestamp)}</span>
+          </div>
+        </div>
+        <div class="alert-tokens">Tokens: ${(a.tokens||[]).join(' · ')}</div>
+        <div class="alert-reason">${a.reason || ''}</div>
+      </div>`).join('');
+  }
+
+  function renderNews(list) {
+    const wrap = document.getElementById('news-wrap');
+    if (!list?.length) { wrap.innerHTML = '<div class="empty">No news yet — will populate on next cycle</div>'; return; }
+    wrap.innerHTML = list.map(item => {
+      const narr = item.narrative ? `<span class="badge b-purple" style="margin-right:4px">${item.narrative}</span>` : '';
+      return `<div class="news-item">
+        <div style="flex:1">
+          <div class="news-title">${item.link ? `<a href="${item.link}" target="_blank" rel="noopener">${item.title}</a>` : item.title}</div>
+          <div class="news-meta">${narr}<span>${timeAgo(item.timestamp)}</span></div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderGithub(list) {
+    const wrap = document.getElementById('gh-wrap');
+    if (!list?.length) { wrap.innerHTML = '<div class="empty">No GitHub data yet — fetched every 4 cycles (~1hr)</div>'; return; }
+    const sorted = [...list].sort((a, b) => b.activity_score - a.activity_score);
+    wrap.innerHTML = sorted.map(g => {
+      const scoreColor2 = g.activity_score >= 70 ? 'var(--green)' : g.activity_score >= 40 ? 'var(--yellow)' : 'var(--dim)';
+      return `<div class="gh-item">
+        <div>
+          <div class="gh-repo">${g.repo}</div>
+          <div class="gh-meta">
+            <span>⭐ ${(g.stars||0).toLocaleString()}</span>
+            <span>⎇ ${(g.forks||0).toLocaleString()}</span>
+            <span>push: ${g.days_since_push}d ago</span>
+          </div>
+        </div>
+        <div>
+          <div class="bar-wrap" style="justify-content:flex-end">
+            <span style="color:${scoreColor2};font-size:12px">${(g.activity_score||0).toFixed(0)}</span>
+            <div class="bar-track" style="width:60px"><div class="bar-fill" style="width:${g.activity_score||0}%;background:${scoreColor2}"></div></div>
+          </div>
+          <div class="muted" style="text-align:right;font-size:10px;margin-top:2px">${timeAgo(g.timestamp)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>
